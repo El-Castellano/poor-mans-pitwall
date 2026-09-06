@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>F1 Poller Status</title>
+<style>
+  body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+  h1 { font-size: 16px; }
+  pre { white-space: pre-wrap; word-break: break-all; background: #1c1c1c; padding: 10px; border-radius: 6px; }
+  .ok { color: #16c784; }
+  .bad { color: #e10600; }
+</style>
+</head>
+<body>
+<h1>F1 poller status</h1>
+<p>This page just confirms the GitHub Action is publishing data. Your phone dashboard doesn't use this page -- your laptop's Django app fetches <code>state.json</code> directly.</p>
+<div id="status">Loading state.json…</div>
+<pre id="raw"></pre>
+<script>
+fetch('state.json').then(r => r.json()).then(d => {
+  const s = document.getElementById('status');
+  s.innerHTML = d.ok
+    ? `<span class="ok">OK</span> — session: ${d.session ? d.session.session_name : '—'} — generated ${d.generated_at}`
+    : `<span class="bad">STALE/ERROR</span> — ${d.reason || ''} — last good data from ${d.generated_at}`;
+  document.getElementById('raw').textContent = JSON.stringify(d, null, 2);
+}).catch(e => {
+  document.getElementById('status').innerHTML = '<span class="bad">No state.json published yet. Run the workflow first.</span>';
+});
+</script>
+</body>
+</html>
