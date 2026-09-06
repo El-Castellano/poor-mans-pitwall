@@ -42,7 +42,7 @@ end-to-end; the custom domain step below is optional polish.
 
 ### 3. (Optional) put it on your own domain
 
-You said you've already got a domain on Cloudflare, so in
+If you've already got a domain on Cloudflare, so in
 `wrangler.toml` uncomment and edit:
 
 ```toml
