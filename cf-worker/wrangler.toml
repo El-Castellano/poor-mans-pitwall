@@ -1,0 +1,25 @@
+name = "f1panel-timing"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[durable_objects.bindings]]
+name = "TIMING_POLLER"
+class_name = "TimingPoller"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["TimingPoller"]
+
+# Cheap once-a-minute keep-alive (see scheduled() in src/index.js). The
+# actual poll loop runs on the Durable Object's own alarm every 4-5s (live)
+# / 2-3s (replay) -- this cron is just insurance in case that chain ever
+# breaks, not the thing driving normal ticks.
+[triggers]
+crons = ["*/1 * * * *"]
+
+# Once you've added your domain to Cloudflare, point a subdomain at this
+# worker instead of using the workers.dev URL:
+#
+# [[routes]]
+# pattern = "f1.yourdomain.com/*"
+# custom_domain = true
