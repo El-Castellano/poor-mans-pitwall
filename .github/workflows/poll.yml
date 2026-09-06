@@ -1,0 +1,88 @@
+name: F1 Live Poller
+
+# Start this manually (Actions tab -> F1 Live Poller -> Run workflow) a
+# few minutes before a session, from your phone if you like -- no laptop
+# needed. It runs for up to ~5.5 hours (GitHub caps any single job at 6h)
+# publishing a fresh site/state.json to the gh-pages branch every ~8s
+# while a real session is live.
+#
+# If F1's own feed says nothing is live when you start this, poller.py
+# automatically falls back to replaying the most recent completed session
+# from OpenF1 instead of publishing an empty state -- see replay.py and
+# docs/STATE_SCHEMA.md. Replay mode publishes faster (every 2-3s, below)
+# since it's just local computation rather than scraping a live feed, and
+# it keeps checking F1's own feed every tick, so it drops the replay and
+# switches to live data by itself the moment a real session goes live.
+#
+# Want it to start itself? Uncomment a `schedule:` entry below with the
+# session's start time in UTC, and add another for the end of the
+# session window (cron min granularity is 5 minutes, and it can't know
+# a race got red-flagged and restarted, so manual is more reliable).
+on:
+  workflow_dispatch: {}
+  # schedule:
+  #   - cron: '0 13 * * 0'   # example only -- edit per race weekend
+
+permissions:
+  contents: write
+
+concurrency:
+  group: f1-poller
+  cancel-in-progress: true
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install requests
+
+      - name: Prepare gh-pages worktree
+        run: |
+          git config user.name "f1-poller-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git fetch origin gh-pages 2>/dev/null || true
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git worktree add site origin/gh-pages
+          else
+            git worktree add --orphan -b gh-pages site
+          fi
+          mkdir -p site
+          cp docs-source/index.html site/index.html 2>/dev/null || true
+
+      - name: Poll F1 live timing (or replay the last session) for up to ~5.5 hours
+        run: |
+          END=$((SECONDS + 19800))
+          while [ $SECONDS -lt $END ]; do
+            python poller.py --out site --cache .poller_cache.json
+            cd site
+            git add -A
+            if ! git diff --cached --quiet; then
+              if git log -1 --pretty=%s 2>/dev/null | grep -q "^data update"; then
+                git commit --amend --no-edit -q
+              else
+                git commit -q -m "data update"
+              fi
+              git push --force origin HEAD:gh-pages -q
+            fi
+            cd ..
+
+            # Live ticks are spaced out (8s) to be a reasonable citizen of
+            # F1's unofficial feed. Replay mode has no such feed to be
+            # gentle with -- it's just replaying data already fetched
+            # from OpenF1 -- so it ticks faster (every 2-3s) for a
+            # noticeably livelier-feeling demo.
+            MODE=$(python -c "import json; print(json.load(open('site/state.json')).get('mode', 'live'))" 2>/dev/null || echo live)
+            if [ "$MODE" = "replay" ]; then
+              SLEEP=$(( (RANDOM % 2) + 2 ))
+            else
+              SLEEP=8
+            fi
+            sleep "$SLEEP"
+          done
